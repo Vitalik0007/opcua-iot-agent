@@ -24,6 +24,7 @@ namespace Agent.Azure
             var json = JsonConvert.SerializeObject(telemetryData);
             var message = new Message(Encoding.UTF8.GetBytes(json));
             await _deviceClient.SendEventAsync(message);
+            Console.WriteLine($"[Telemetry Sent] {json}");
         }
 
         public void Disconnect()
