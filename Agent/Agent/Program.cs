@@ -27,7 +27,8 @@ class Program
             Console.WriteLine("4. Device Twin");
             Console.WriteLine("5. Direct Methods (placeholder)");
             Console.WriteLine("6. Logika biznesowa (placeholder)");
-            Console.WriteLine("7. Zakończ program");
+            Console.WriteLine("7. Zmień Desired property");
+            Console.WriteLine("8. Zakończ program");
             Console.Write("Wybierz opcję: ");
 
             var key = Console.ReadLine();
@@ -59,6 +60,15 @@ class Program
                     break;
 
                 case "7":
+                    Console.Write("Podaj nazwę właściwości: ");
+                    var propName = Console.ReadLine();
+                    Console.Write("Podaj wartość: ");
+                    var propValue = Console.ReadLine();
+
+                    await iotClient.UpdateDesiredPropertyAsync(propName, propValue);
+                    break;
+
+                case "8":
                     running = false;
                     break;
 

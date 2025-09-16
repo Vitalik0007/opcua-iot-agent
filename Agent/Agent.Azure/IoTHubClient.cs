@@ -29,7 +29,6 @@ namespace Agent.Azure
             await _deviceClient.SendEventAsync(message);
             Console.WriteLine($"[Telemetry Sent] {json}");
 
-            // Оновлюємо reported properties
             var reported = new
             {
                 productionStatus = telemetryData.GetType().GetProperty("productionStatus")?.GetValue(telemetryData),
@@ -62,6 +61,24 @@ namespace Agent.Azure
             var twinCollection = new TwinCollection(JsonConvert.SerializeObject(reportedData));
             await _deviceClient.UpdateReportedPropertiesAsync(twinCollection);
             Console.WriteLine("[Device Twin] Reported properties updated");
+        }
+
+        public async Task UpdateDesiredPropertyAsync(string propertyName, string value)
+        {
+            if (_deviceClient == null) return;
+
+            object typedValue = value;
+
+            if (int.TryParse(value, out int intValue))
+                typedValue = intValue;
+            else if (double.TryParse(value, out double doubleValue))
+                typedValue = doubleValue;
+
+            var desired = new TwinCollection();
+            desired[propertyName] = typedValue;
+
+            await _deviceClient.UpdateReportedPropertiesAsync(desired);
+            Console.WriteLine($"[Device Twin] Desired property '{propertyName}' updated to '{typedValue}'");
         }
 
         public void Disconnect()
