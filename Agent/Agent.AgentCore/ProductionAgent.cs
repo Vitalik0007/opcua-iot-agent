@@ -2,7 +2,9 @@
 using Agent.OpcUa;
 using System;
 using System.Timers;
+using System.Text;
 using System.Threading.Tasks;
+using Microsoft.Azure.Devices.Client;
 
 namespace Agent.AgentCore
 {
@@ -27,6 +29,8 @@ namespace Agent.AgentCore
             _opcUa.Connect();
             _iot.Connect();
             Console.WriteLine("[Agent] Connected to OPC UA and IoT Hub.");
+
+            RegisterDirectMethods();
         }
 
         public async Task SendTelemetryOnceAsync()
@@ -70,5 +74,44 @@ namespace Agent.AgentCore
             _iot.Disconnect();
             Console.WriteLine("[Agent] Disconnected.");
         }
+
+        #region Direct Methods
+        private void RegisterDirectMethods()
+        {
+            _iot.DeviceClient.SetMethodHandlerAsync("ResetCounters", ResetCountersMethod, null);
+            _iot.DeviceClient.SetMethodHandlerAsync("StopProduction", StopProductionMethod, null);
+        }
+
+        private Task<MethodResponse> ResetCountersMethod(MethodRequest methodRequest, object userContext)
+        {
+            Console.WriteLine("[Direct Method] ResetCounters invoked");
+
+            string result = "{\"status\":\"Counters reset\"}";
+            return Task.FromResult(new MethodResponse(Encoding.UTF8.GetBytes(result), 200));
+        }
+
+        private Task<MethodResponse> StopProductionMethod(MethodRequest methodRequest, object userContext)
+        {
+            Console.WriteLine("[Direct Method] StopProduction invoked");
+            StopTelemetryLoop();
+
+            string result = "{\"status\":\"Production stopped\"}";
+            return Task.FromResult(new MethodResponse(Encoding.UTF8.GetBytes(result), 200));
+        }
+        public async Task<string> ResetCountersAsync()
+        {
+            Console.WriteLine("[Direct Method] ResetCounters invoked from menu");
+
+            return await Task.FromResult("Counters reset successfully");
+        }
+
+        public async Task<string> StopProductionAsync()
+        {
+            Console.WriteLine("[Direct Method] StopProduction invoked from menu");
+            StopTelemetryLoop();
+            return await Task.FromResult("Production stopped successfully");
+        }
+
+        #endregion
     }
 }

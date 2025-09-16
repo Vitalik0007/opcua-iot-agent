@@ -10,7 +10,7 @@ namespace Agent.Azure
     public class IoTHubClient
     {
         private readonly string _connectionString;
-        private DeviceClient _deviceClient;
+        public DeviceClient DeviceClient { get; private set; }
 
         public IoTHubClient(string connectionString)
         {
@@ -19,14 +19,14 @@ namespace Agent.Azure
 
         public void Connect()
         {
-            _deviceClient = DeviceClient.CreateFromConnectionString(_connectionString, TransportType.Mqtt);
+            DeviceClient = DeviceClient.CreateFromConnectionString(_connectionString, TransportType.Mqtt);
         }
 
         public async Task SendTelemetryAsync(object telemetryData)
         {
             var json = JsonConvert.SerializeObject(telemetryData);
             var message = new Message(Encoding.UTF8.GetBytes(json));
-            await _deviceClient.SendEventAsync(message);
+            await DeviceClient.SendEventAsync(message);
             Console.WriteLine($"[Telemetry Sent] {json}");
 
             var reported = new
@@ -43,7 +43,7 @@ namespace Agent.Azure
         {
             try
             {
-                var twin = await _deviceClient.GetTwinAsync();
+                var twin = await DeviceClient.GetTwinAsync();
                 Console.WriteLine("\n=== DEVICE TWIN ===");
                 Console.WriteLine(twin.ToJson());
                 Console.WriteLine("===================\n");
@@ -56,16 +56,16 @@ namespace Agent.Azure
 
         public async Task UpdateReportedPropertiesAsync(object reportedData)
         {
-            if (_deviceClient == null) return;
+            if (DeviceClient == null) return;
 
             var twinCollection = new TwinCollection(JsonConvert.SerializeObject(reportedData));
-            await _deviceClient.UpdateReportedPropertiesAsync(twinCollection);
+            await DeviceClient.UpdateReportedPropertiesAsync(twinCollection);
             Console.WriteLine("[Device Twin] Reported properties updated");
         }
 
         public async Task UpdateDesiredPropertyAsync(string propertyName, string value)
         {
-            if (_deviceClient == null) return;
+            if (DeviceClient == null) return;
 
             object typedValue = value;
 
@@ -77,13 +77,13 @@ namespace Agent.Azure
             var desired = new TwinCollection();
             desired[propertyName] = typedValue;
 
-            await _deviceClient.UpdateReportedPropertiesAsync(desired);
+            await DeviceClient.UpdateReportedPropertiesAsync(desired);
             Console.WriteLine($"[Device Twin] Desired property '{propertyName}' updated to '{typedValue}'");
         }
 
         public void Disconnect()
         {
-            _deviceClient?.CloseAsync().Wait();
+            DeviceClient?.CloseAsync().Wait();
         }
     }
 }

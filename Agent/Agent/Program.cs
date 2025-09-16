@@ -25,7 +25,7 @@ class Program
             Console.WriteLine("2. Uruchom auto-telemetrię (co 5 sek.)");
             Console.WriteLine("3. Zatrzymaj auto-telemetrię");
             Console.WriteLine("4. Device Twin");
-            Console.WriteLine("5. Direct Methods (placeholder)");
+            Console.WriteLine("5. Direct Methods");
             Console.WriteLine("6. Logika biznesowa (placeholder)");
             Console.WriteLine("7. Zmień Desired property");
             Console.WriteLine("8. Zakończ program");
@@ -52,7 +52,20 @@ class Program
                     break;
 
                 case "5":
-                    Console.WriteLine("[Direct Methods] Placeholder — tu będzie obsługa metod");
+                    Console.WriteLine("\n=== Direct Methods Menu ===");
+                    Console.WriteLine("1. ResetCounters");
+                    Console.WriteLine("2. StopProduction");
+                    Console.Write("Wybierz metodę: ");
+                    var methodKey = Console.ReadLine();
+
+                    string result = methodKey switch
+                    {
+                        "1" => await agent.ResetCountersAsync(),
+                        "2" => await agent.StopProductionAsync(),
+                        _ => "Nieprawidłowa metoda"
+                    };
+
+                    Console.WriteLine($"[Direct Method Result] {result}");
                     break;
 
                 case "6":
