@@ -24,10 +24,15 @@ namespace Agent.AgentCore
         {
             _opcUa.Connect();
             _iot.Connect();
-            _telemetryTimer.Start();
+            Console.WriteLine("[Agent] Connected to OPC UA and IoT Hub.");
         }
 
         private void SendTelemetry(object sender, ElapsedEventArgs e)
+        {
+            SendTelemetryOnce();
+        }
+
+        public void SendTelemetryOnce()
         {
             try
             {
@@ -37,8 +42,11 @@ namespace Agent.AgentCore
                 _iot.SendTelemetry(new
                 {
                     productionStatus = status,
-                    goodCount = goodCount
+                    goodCount = goodCount,
+                    timestamp = DateTime.UtcNow
                 });
+
+                Console.WriteLine("[Telemetry] Sent once.");
             }
             catch (Exception ex)
             {
@@ -46,11 +54,24 @@ namespace Agent.AgentCore
             }
         }
 
+        public void StartTelemetryLoop()
+        {
+            _telemetryTimer.Start();
+            Console.WriteLine("[Telemetry] Auto sending every 5s started.");
+        }
+
+        public void StopTelemetryLoop()
+        {
+            _telemetryTimer.Stop();
+            Console.WriteLine("[Telemetry] Auto sending stopped.");
+        }
+
         public void Stop()
         {
             _telemetryTimer.Stop();
             _opcUa.Disconnect();
             _iot.Disconnect();
+            Console.WriteLine("[Agent] Disconnected.");
         }
     }
 }
