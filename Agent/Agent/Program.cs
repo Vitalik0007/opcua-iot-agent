@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading.Tasks;
 using Agent.AgentCore;
 using Agent.Azure;
 using Agent.Configuration;
@@ -6,7 +7,7 @@ using Agent.OpcUa;
 
 class Program
 {
-    static void Main(string[] args)
+    static async Task Main(string[] args)
     {
         var config = new AppConfig();
         var opcClient = new OpcUaClient(config.OpcUaEndpointUrl);
@@ -23,7 +24,7 @@ class Program
             Console.WriteLine("1. Wyślij telemetrię jednorazowo");
             Console.WriteLine("2. Uruchom auto-telemetrię (co 5 sek.)");
             Console.WriteLine("3. Zatrzymaj auto-telemetrię");
-            Console.WriteLine("4. Device Twin (placeholder)");
+            Console.WriteLine("4. Device Twin");
             Console.WriteLine("5. Direct Methods (placeholder)");
             Console.WriteLine("6. Logika biznesowa (placeholder)");
             Console.WriteLine("7. Zakończ program");
@@ -34,7 +35,7 @@ class Program
             switch (key)
             {
                 case "1":
-                    agent.SendTelemetryOnce();
+                    await agent.SendTelemetryOnceAsync();
                     break;
 
                 case "2":
@@ -46,7 +47,7 @@ class Program
                     break;
 
                 case "4":
-                    Console.WriteLine("[Device Twin] Placeholder — tu będzie obsługa Twin");
+                    await iotClient.ShowDeviceTwinAsync();
                     break;
 
                 case "5":

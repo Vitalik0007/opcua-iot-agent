@@ -1,6 +1,8 @@
 ﻿using Agent.Azure;
 using Agent.OpcUa;
+using System;
 using System.Timers;
+using System.Threading.Tasks;
 
 namespace Agent.AgentCore
 {
@@ -16,7 +18,7 @@ namespace Agent.AgentCore
             _iot = iot;
 
             _telemetryTimer = new System.Timers.Timer(5000);
-            _telemetryTimer.Elapsed += SendTelemetry;
+            _telemetryTimer.Elapsed += async (s, e) => await SendTelemetryOnceAsync();
             _telemetryTimer.AutoReset = true;
         }
 
@@ -27,19 +29,14 @@ namespace Agent.AgentCore
             Console.WriteLine("[Agent] Connected to OPC UA and IoT Hub.");
         }
 
-        private void SendTelemetry(object sender, ElapsedEventArgs e)
-        {
-            SendTelemetryOnce();
-        }
-
-        public void SendTelemetryOnce()
+        public async Task SendTelemetryOnceAsync()
         {
             try
             {
                 var status = _opcUa.ReadNode("ns=2;s=ProductionStatus").Value;
                 var goodCount = _opcUa.ReadNode("ns=2;s=GoodCount").Value;
 
-                _iot.SendTelemetry(new
+                await _iot.SendTelemetryAsync(new
                 {
                     productionStatus = status,
                     goodCount = goodCount,
