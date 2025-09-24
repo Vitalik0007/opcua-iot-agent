@@ -24,17 +24,19 @@ namespace Agent.Azure
 
         public async Task SendTelemetryAsync(object telemetryData)
         {
+            if (DeviceClient == null) return;
+
             var json = JsonConvert.SerializeObject(telemetryData);
             var message = new Message(Encoding.UTF8.GetBytes(json));
             await DeviceClient.SendEventAsync(message);
             Console.WriteLine($"[Telemetry Sent] {json}");
 
-            var reported = new
+            var reported = new TwinCollection();
+            foreach (var prop in telemetryData.GetType().GetProperties())
             {
-                productionStatus = telemetryData.GetType().GetProperty("productionStatus")?.GetValue(telemetryData),
-                goodCount = telemetryData.GetType().GetProperty("goodCount")?.GetValue(telemetryData),
-                lastTelemetry = DateTime.UtcNow
-            };
+                reported[prop.Name] = prop.GetValue(telemetryData);
+            }
+            reported["lastTelemetry"] = DateTime.UtcNow;
 
             await UpdateReportedPropertiesAsync(reported);
         }
@@ -54,31 +56,23 @@ namespace Agent.Azure
             }
         }
 
-        public async Task UpdateReportedPropertiesAsync(object reportedData)
+        public async Task UpdateReportedPropertiesAsync(TwinCollection reportedData)
         {
             if (DeviceClient == null) return;
 
-            var twinCollection = new TwinCollection(JsonConvert.SerializeObject(reportedData));
-            await DeviceClient.UpdateReportedPropertiesAsync(twinCollection);
+            await DeviceClient.UpdateReportedPropertiesAsync(reportedData);
             Console.WriteLine("[Device Twin] Reported properties updated");
         }
 
-        public async Task UpdateDesiredPropertyAsync(string propertyName, string value)
+        public async Task UpdateReportedPropertyAsync(string propertyName, object value)
         {
             if (DeviceClient == null) return;
 
-            object typedValue = value;
-
-            if (int.TryParse(value, out int intValue))
-                typedValue = intValue;
-            else if (double.TryParse(value, out double doubleValue))
-                typedValue = doubleValue;
-
             var desired = new TwinCollection();
-            desired[propertyName] = typedValue;
+            desired[propertyName] = value;
 
             await DeviceClient.UpdateReportedPropertiesAsync(desired);
-            Console.WriteLine($"[Device Twin] Desired property '{propertyName}' updated to '{typedValue}'");
+            Console.WriteLine($"[Device Twin] Desired property '{propertyName}' updated to '{value}'");
         }
 
         public void Disconnect()

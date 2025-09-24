@@ -5,6 +5,7 @@ using System.Timers;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Azure.Devices.Client;
+using Microsoft.Azure.Devices.Shared;
 
 namespace Agent.AgentCore
 {
@@ -14,10 +15,15 @@ namespace Agent.AgentCore
         private readonly IoTHubClient _iot;
         private readonly System.Timers.Timer _telemetryTimer;
 
-        public ProductionAgent(OpcUaClient opcUa, IoTHubClient iot)
+        private readonly int _errorWindowSeconds;
+        private readonly System.Collections.Generic.Queue<(DateTime timestamp, int errorFlags)> _recentErrors;
+
+        public ProductionAgent(OpcUaClient opcUa, IoTHubClient iot, int errorWindowSeconds = 60)
         {
             _opcUa = opcUa;
             _iot = iot;
+            _errorWindowSeconds = errorWindowSeconds;
+            _recentErrors = new System.Collections.Generic.Queue<(DateTime, int)>();
 
             _telemetryTimer = new System.Timers.Timer(5000);
             _telemetryTimer.Elapsed += async (s, e) => await SendTelemetryOnceAsync();
@@ -37,14 +43,58 @@ namespace Agent.AgentCore
         {
             try
             {
-                var status = _opcUa.ReadNode("ns=2;s=ProductionStatus").Value;
-                var goodCount = _opcUa.ReadNode("ns=2;s=GoodCount").Value;
+                var status = _opcUa.ReadNode("ns=2;s=Device 2/ProductionStatus").Value;
+                var goodCount = Convert.ToDouble(_opcUa.ReadNode("ns=2;s=Device 2/GoodCount").Value);
+                var badCount = Convert.ToDouble(_opcUa.ReadNode("ns=2;s=Device 2/BadCount").Value);
+                var temperature = Convert.ToDouble(_opcUa.ReadNode("ns=2;s=Device 2/Temperature").Value);
+                var errorFlags = Convert.ToInt32(_opcUa.ReadNode("ns=2;s=Device 2/DeviceErrors").Value);
+
+                if (temperature > 80)
+                {
+                    Console.WriteLine("[BusinessLogic] High temperature! Activating Emergency Stop...");
+                    _opcUa.InvokeMethod("ns=2;s=Device 2", "ns=2;s=Device 2/EmergencyStop");
+                }
+
+                double totalProduced = goodCount + badCount;
+                double goodRate = totalProduced > 0 ? (goodCount / totalProduced) * 100.0 : 100.0;
+                if (goodRate < 90)
+                {
+                    Console.WriteLine("[BusinessLogic] Good production rate < 90%, reducing Desired Production Rate by 10%");
+                    var twin = await _iot.DeviceClient.GetTwinAsync();
+                    double currentDesired = twin.Properties.Desired.Contains("ProductionRate") ?
+                        Convert.ToDouble(twin.Properties.Desired["ProductionRate"]) : 100;
+                    var newDesired = Math.Max(0, currentDesired - 10);
+                    await _iot.UpdateReportedPropertyAsync("ProductionRate", newDesired.ToString());
+                }
+
+                DateTime now = DateTime.UtcNow;
+                if (errorFlags != 0)
+                {
+                    _recentErrors.Enqueue((now, errorFlags));
+                    Console.WriteLine($"[BusinessLogic] Device Error detected: {errorFlags}. (Email placeholder)");
+                }
+
+                while (_recentErrors.Count > 0 && (now - _recentErrors.Peek().timestamp).TotalSeconds > _errorWindowSeconds)
+                    _recentErrors.Dequeue();
+
+                int recentErrorCount = 0;
+                foreach (var e in _recentErrors)
+                    if (e.errorFlags != 0) recentErrorCount++;
+
+                if (recentErrorCount > 3)
+                {
+                    Console.WriteLine("[BusinessLogic] More than 3 errors detected in window! Triggering Emergency Stop...");
+                    _opcUa.InvokeMethod("ns=2;s=Device 2", "ns=2;s=Device 2/EmergencyStop");
+                    _recentErrors.Clear();
+                }
 
                 await _iot.SendTelemetryAsync(new
                 {
                     productionStatus = status,
-                    goodCount = goodCount,
-                    timestamp = DateTime.UtcNow
+                    goodCount,
+                    badCount,
+                    temperature,
+                    timestamp = now
                 });
 
                 Console.WriteLine("[Telemetry] Sent once.");
@@ -78,15 +128,17 @@ namespace Agent.AgentCore
         #region Direct Methods
         private void RegisterDirectMethods()
         {
-            _iot.DeviceClient.SetMethodHandlerAsync("ResetCounters", ResetCountersMethod, null);
+            _iot.DeviceClient.SetMethodHandlerAsync("StartProduction", StartProductionMethod, null);
             _iot.DeviceClient.SetMethodHandlerAsync("StopProduction", StopProductionMethod, null);
+            _iot.DeviceClient.SetMethodHandlerAsync("EmergencyStop", EmergencyStopMethod, null);
+            _iot.DeviceClient.SetMethodHandlerAsync("ResetErrorStatus", ResetErrorStatusMethod, null);
         }
 
-        private Task<MethodResponse> ResetCountersMethod(MethodRequest methodRequest, object userContext)
+        private Task<MethodResponse> StartProductionMethod(MethodRequest methodRequest, object userContext)
         {
-            Console.WriteLine("[Direct Method] ResetCounters invoked");
-
-            string result = "{\"status\":\"Counters reset\"}";
+            Console.WriteLine("[Direct Method] StartProduction invoked");
+            StartTelemetryLoop();
+            string result = "{\"status\":\"Production started\"}";
             return Task.FromResult(new MethodResponse(Encoding.UTF8.GetBytes(result), 200));
         }
 
@@ -94,22 +146,34 @@ namespace Agent.AgentCore
         {
             Console.WriteLine("[Direct Method] StopProduction invoked");
             StopTelemetryLoop();
-
             string result = "{\"status\":\"Production stopped\"}";
             return Task.FromResult(new MethodResponse(Encoding.UTF8.GetBytes(result), 200));
         }
-        public async Task<string> ResetCountersAsync()
-        {
-            Console.WriteLine("[Direct Method] ResetCounters invoked from menu");
 
-            return await Task.FromResult("Counters reset successfully");
+        private Task<MethodResponse> EmergencyStopMethod(MethodRequest methodRequest, object userContext)
+        {
+            Console.WriteLine("[Direct Method] EmergencyStop invoked");
+            _opcUa.InvokeMethod("ns=2;s=Device 2", "ns=2;s=Device 2/EmergencyStop");
+            string result = "{\"status\":\"Emergency Stop triggered\"}";
+            return Task.FromResult(new MethodResponse(Encoding.UTF8.GetBytes(result), 200));
         }
 
-        public async Task<string> StopProductionAsync()
+        private Task<MethodResponse> ResetErrorStatusMethod(MethodRequest methodRequest, object userContext)
         {
-            Console.WriteLine("[Direct Method] StopProduction invoked from menu");
-            StopTelemetryLoop();
-            return await Task.FromResult("Production stopped successfully");
+            Console.WriteLine("[Direct Method] ResetErrorStatus invoked");
+
+            try
+            {
+                _opcUa.InvokeMethod("ns=2;s=Device 2", "ns=2;s=Device 2/ResetErrorStatus");
+                string result = "{\"status\":\"Device error status reset\"}";
+                return Task.FromResult(new MethodResponse(Encoding.UTF8.GetBytes(result), 200));
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Direct Method Error] {ex.Message}");
+                string result = "{\"status\":\"Failed to reset device error status\"}";
+                return Task.FromResult(new MethodResponse(Encoding.UTF8.GetBytes(result), 500));
+            }
         }
 
         #endregion

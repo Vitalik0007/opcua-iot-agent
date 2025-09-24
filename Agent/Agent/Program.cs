@@ -25,10 +25,8 @@ class Program
             Console.WriteLine("2. Uruchom auto-telemetrię (co 5 sek.)");
             Console.WriteLine("3. Zatrzymaj auto-telemetrię");
             Console.WriteLine("4. Device Twin");
-            Console.WriteLine("5. Direct Methods");
-            Console.WriteLine("6. Logika biznesowa (placeholder)");
-            Console.WriteLine("7. Zmień Desired property");
-            Console.WriteLine("8. Zakończ program");
+            Console.WriteLine("5. Direct Methods (Start/Stop Production)");
+            Console.WriteLine("7. Zakończ program");
             Console.Write("Wybierz opcję: ");
 
             var key = Console.ReadLine();
@@ -53,35 +51,32 @@ class Program
 
                 case "5":
                     Console.WriteLine("\n=== Direct Methods Menu ===");
-                    Console.WriteLine("1. ResetCounters");
+                    Console.WriteLine("1. StartProduction");
                     Console.WriteLine("2. StopProduction");
                     Console.Write("Wybierz metodę: ");
                     var methodKey = Console.ReadLine();
 
-                    string result = methodKey switch
+                    string result;
+
+                    switch (methodKey)
                     {
-                        "1" => await agent.ResetCountersAsync(),
-                        "2" => await agent.StopProductionAsync(),
-                        _ => "Nieprawidłowa metoda"
-                    };
+                        case "1":
+                            agent.StartTelemetryLoop();
+                            result = "StartProduction invoked locally";
+                            break;
+                        case "2":
+                            agent.StopTelemetryLoop();
+                            result = "StopProduction invoked locally";
+                            break;
+                        default:
+                            result = "Nieprawidłowa metoda";
+                            break;
+                    }
 
                     Console.WriteLine($"[Direct Method Result] {result}");
                     break;
 
                 case "6":
-                    Console.WriteLine("[Logika biznesowa] Placeholder — tu będą obliczenia");
-                    break;
-
-                case "7":
-                    Console.Write("Podaj nazwę właściwości: ");
-                    var propName = Console.ReadLine();
-                    Console.Write("Podaj wartość: ");
-                    var propValue = Console.ReadLine();
-
-                    await iotClient.UpdateDesiredPropertyAsync(propName, propValue);
-                    break;
-
-                case "8":
                     running = false;
                     break;
 

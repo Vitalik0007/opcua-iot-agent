@@ -24,9 +24,9 @@ namespace Agent.OpcUa
             _client.WriteNode(nodeId, value);
         }
 
-        public void InvokeMethod(string methodId)
+        public void InvokeMethod(string objectId, string methodId, params object[] args)
         {
-            //_client.CallMethod(methodId);
+            _client.CallMethod(objectId, methodId, args);
         }
 
         public void Disconnect() => _client.Disconnect();
